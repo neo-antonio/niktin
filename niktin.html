@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Niktin Ads v0.6</title>
+<link rel="icon" href="favicon.png" type="image/png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --black: #111110;
+    --black-soft: #1c1c1b;
+    --gray-800: #3a3a38;
+    --gray-600: #6b6b68;
+    --gray-400: #a3a3a0;
+    --gray-200: #e0e0dc;
+    --gray-100: #f0f0ed;
+    --gray-50: #f8f8f6;
+    --white: #ffffff;
+    --accent: #111110;
+    --accent-hover: #2e2e2c;
+    --danger: #c0392b;
+    --success: #1a6644;
+    --success-bg: #eaf3de;
+    --warning-bg: #faeeda;
+    --warning: #854f0b;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --font: 'Inter', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Mono', monospace;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+  }
+
+  html { font-family: var(--font); background: var(--white); color: var(--black); font-size: 15px; line-height: 1.6; }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--gray-200);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--white);
+    z-index: 100;
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--black);
+  }
+  .header-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--gray-600);
+    flex-shrink: 0;
+  }
+  .header-logo img { width: 28px; height: 28px; border-radius: var(--radius-sm); object-fit: cover; }
+  .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .header-version {
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    padding: 2px 8px;
+    border-radius: 99px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── MAIN ── */
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── SECTION LABEL ── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gray-400);
+    margin-bottom: 0.5rem;
+  }
+
+  /* ── STEP ── */
+  .step {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+  .step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--black);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-title { font-size: 14px; font-weight: 600; color: var(--black-soft); }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 1.5px dashed var(--gray-200);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: var(--gray-50);
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--black);
+    background: var(--gray-100);
+  }
+  .upload-icon { font-size: 28px; margin-bottom: 0.5rem; opacity: 0.3; }
+  .upload-text { font-size: 14px; color: var(--gray-600); }
+  .upload-text strong { color: var(--black); }
+  .upload-hint { font-size: 12px; color: var(--gray-400); margin-top: 0.25rem; }
+  #csv-file-input { display: none; }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 0.6rem 1rem;
+    background: var(--success-bg);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--success);
+    font-weight: 500;
+    margin-top: 0.75rem;
+  }
+  .status-bar.visible { display: flex; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+
+  /* ── TEXTAREA ── */
+  textarea {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    background: var(--gray-50);
+    color: var(--black);
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--black); background: var(--white); }
+  textarea::placeholder { color: var(--gray-400); }
+
+  /* ── COLUMN PICKER ── */
+  .col-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+    margin-top: 0.75rem;
+  }
+  .col-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+    font-size: 13px;
+    color: var(--gray-800);
+    user-select: none;
+  }
+  .col-check:hover { background: var(--gray-50); border-color: var(--gray-400); }
+  .col-check.checked { background: var(--black); color: var(--white); border-color: var(--black); }
+  .col-check input { display: none; }
+  .col-check-icon { font-size: 13px; opacity: 0.5; }
+  .col-check.checked .col-check-icon { opacity: 1; }
+
+  .col-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  /* ── BUTTONS ── */
+  button {
+    font-family: var(--font);
+    cursor: pointer;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1rem;
+    transition: background 0.12s, transform 0.08s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  button:active { transform: scale(0.98); }
+
+  .btn-primary {
+    background: var(--black);
+    color: var(--white);
+  }
+  .btn-primary:hover { background: var(--gray-800); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--gray-600);
+    border: 1px solid var(--gray-200);
+  }
+  .btn-ghost:hover { background: var(--gray-100); color: var(--black); border-color: var(--gray-400); }
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid #f5c6c2;
+  }
+  .btn-danger:hover { background: #fdf2f1; }
+
+  .generate-bar {
+    display: flex;
+    gap: 10px;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  /* ── TABS ── */
+  .output-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--gray-200);
+    margin-bottom: 0;
+  }
+  .tab-btn {
+    padding: 0.6rem 1.1rem;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-600);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .tab-btn.active { color: var(--black); border-bottom-color: var(--black); }
+  .tab-btn:hover:not(.active) { color: var(--black); }
+
+  /* ── OUTPUT SECTION ── */
+  #output-section { display: none; }
+  #output-section.visible { display: block; margin-top: 1.5rem; }
+
+  /* ── RAW CSV ── */
+  #csv-raw {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.75;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    padding: 1rem;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--black);
+    max-height: 420px;
+    overflow-y: auto;
+    display: none;
+  }
+
+  /* ── TABLE VIEW ── */
+  #table-view-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--gray-200);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    max-height: 520px;
+    overflow-y: auto;
+    display: none;
+  }
+  #csv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  #csv-table thead tr {
+    background: var(--black);
+    color: var(--white);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  #csv-table th {
+    padding: 0.6rem 0.85rem;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  #csv-table td {
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--gray-100);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--gray-800);
+    white-space: nowrap;
+  }
+  #csv-table tr:last-child td { border-bottom: none; }
+  #csv-table tbody tr:hover td { background: var(--gray-50); }
+  #csv-table td.col-adid { color: var(--black); font-weight: 500; }
+  #csv-table td.col-num { text-align: right; }
+
+  /* ── OUTPUT META BAR ── */
+  .output-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1rem;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-bottom: none;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .output-meta-left { display: flex; align-items: center; gap: 10px; }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 99px;
+  }
+  .badge-rows { background: var(--warning-bg); color: var(--warning); }
+  .badge-cols { background: var(--success-bg); color: var(--success); }
+  .output-meta-right { display: flex; gap: 8px; }
+
+  /* ── EMPTY / ERROR STATE ── */
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--gray-400);
+    font-size: 13px;
+  }
+  .empty-state svg { margin-bottom: 1rem; opacity: 0.3; }
+
+  .alert {
+    padding: 0.65rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    margin-top: 0.75rem;
+    display: none;
+  }
+  .alert.visible { display: block; }
+  .alert-warn { background: var(--warning-bg); color: var(--warning); }
+  .alert-err { background: #fdf2f1; color: var(--danger); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--gray-200);
+    padding: 1.75rem 2rem;
+    text-align: center;
+    font-size: 12px;
+    color: var(--gray-400);
+    line-height: 2;
+  }
+  footer a { color: var(--gray-600); text-decoration: none; border-bottom: 1px solid var(--gray-200); }
+  footer a:hover { color: var(--black); border-color: var(--black); }
+  footer strong { color: var(--gray-600); font-weight: 500; }
+
+  /* ── INTRO ── */
+  .intro {
+    padding: 1.75rem 0 1.25rem;
+    border-bottom: 1px solid var(--gray-100);
+    margin-bottom: 1.5rem;
+  }
+  .intro h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--black); }
+  .intro p { font-size: 14px; color: var(--gray-600); margin-top: 0.35rem; max-width: 560px; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+  @media (max-width: 600px) {
+    header { padding: 0 1rem; }
+    main { padding: 1.25rem 1rem 3rem; }
+    .col-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <a class="header-brand" href="#">
+    <span class="header-logo">
+      <img src="favicon.png" alt="Niktin Ads" onerror="this.style.display='none';this.parentNode.textContent='NA'" />
+    </span>
+    <span class="header-title">Niktin Ads</span>
+  </a>
+  <span class="header-version">v0.6</span>
+</header>
+
+<!-- MAIN -->
+<main>
+  <div class="intro">
+    <h1>Ad Performance Filter</h1>
+    <p>Upload your Meta Ads Manager CSV export, paste Ad IDs to filter, pick columns, and copy the result straight into your tracker sheet.</p>
+  </div>
+
+  <!-- STEP 1 — Upload CSV -->
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">1</span>
+      <span class="step-title">Upload Meta Ads CSV export</span>
+    </div>
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-file-input').click()">
+      <div class="upload-icon">⬆</div>
+      <div class="upload-text"><strong>Click to upload</strong> or drag and drop</div>
+      <div class="upload-hint">CSV exported from Ads Manager with all active ads</div>
+    </div>
+    <input type="file" id="csv-file-input" accept=".csv,text/csv" />
+    <div class="status-bar" id="upload-status">
+      <span class="status-dot"></span>
+      <span id="upload-status-text">File loaded</span>
+    </div>
+    <div class="alert alert-err" id="upload-err"></div>
+  </div>
+
+  <!-- STEP 2 — Paste Ad IDs -->
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">2</span>
+      <span class="step-title">Paste Ad IDs to filter</span>
+    </div>
+    <p style="font-size:13px;color:var(--gray-600);margin-bottom:0.75rem;">One Ad ID per line. Order is preserved. Leave blank to include all ads.</p>
+    <textarea id="ad-ids-input" rows="6" placeholder="120213456789010&#10;120213456789011&#10;120213456789012"></textarea>
+    <div class="alert alert-warn" id="ids-warn"></div>
+  </div>
+
+  <!-- STEP 3 — Pick Columns -->
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">3</span>
+      <span class="step-title">Select columns to include</span>
+    </div>
+    <div class="col-actions">
+      <button class="btn-ghost" onclick="toggleAllCols(true)">Check all</button>
+      <button class="btn-ghost" onclick="toggleAllCols(false)">Uncheck all</button>
+      <button class="btn-ghost" onclick="applyTrackerPreset()">⚡ Tracker preset</button>
+    </div>
+    <div class="col-grid" id="col-grid">
+      <div class="empty-state" style="padding:1.5rem;grid-column:1/-1;font-size:13px;">Upload a CSV to see available columns</div>
+    </div>
+  </div>
+
+  <!-- GENERATE -->
+  <div class="generate-bar">
+    <button class="btn-primary" onclick="generate()">Generate output</button>
+    <button class="btn-ghost" onclick="resetAll()">Reset all</button>
+  </div>
+  <div class="alert alert-err" id="gen-err"></div>
+
+  <!-- OUTPUT -->
+  <div id="output-section">
+    <div class="output-meta">
+      <div class="output-meta-left">
+        <span class="badge badge-rows" id="badge-rows">0 rows</span>
+        <span class="badge badge-cols" id="badge-cols">0 cols</span>
+        <span style="font-size:12px;color:var(--gray-400);" id="unmatched-note"></span>
+      </div>
+      <div class="output-meta-right">
+        <button class="btn-ghost" onclick="copyTable()">Copy table</button>
+        <button class="btn-ghost" onclick="downloadCSV()">Download CSV</button>
+      </div>
+    </div>
+    <div class="output-tabs">
+      <button class="tab-btn active" id="tab-table" onclick="switchTab('table')">Table view</button>
+      <button class="tab-btn" id="tab-raw" onclick="switchTab('raw')">Raw CSV</button>
+    </div>
+    <div id="table-view-wrap"><table id="csv-table"><thead></thead><tbody></tbody></table></div>
+    <div id="csv-raw"></div>
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div>Visit <a href="https://neushimo.com/niktinads" target="_blank" rel="noopener">neushimo.com</a> for updates</div>
+  <div>©2026 Neo Antonio &nbsp;·&nbsp; All rights reserved &nbsp;·&nbsp; <strong>Niktin Ads v0.6</strong></div>
+</footer>
+
+<script>
+  // ── STATE ──
+  let parsedRows = [];
+  let allHeaders = [];
+  let selectedCols = new Set();
+  let generatedCSV = '';
+  let generatedRows = [];
+  let activeTab = 'table';
+
+  // Tracker preset columns (partial match, case-insensitive)
+  const TRACKER_KEYWORDS = [
+    'ad id', 'ad name', 'amount spent', 'purchases', 'purchase conversion value',
+    'frequency', 'ctr', 'link clicks', 'landing page views', 'adds to cart',
+    'checkouts initiated', 'cost per'
+  ];
+
+  // Numeric columns (right-align)
+  const NUM_KEYWORDS = [
+    'spent', 'amount', 'value', 'ctr', 'frequency', 'purchases', 'clicks',
+    'views', 'cart', 'checkout', 'cost', 'reach', 'impressions', 'results'
+  ];
+
+  // ── CSV PARSER (handles quoted fields) ──
+  function parseCSV(text) {
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const result = [];
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const row = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+          else inQ = !inQ;
+        } else if (c === ',' && !inQ) {
+          row.push(cur.trim()); cur = '';
+        } else {
+          cur += c;
+        }
+      }
+      row.push(cur.trim());
+      result.push(row);
+    }
+    return result;
+  }
+
+  function rowToObj(headers, row) {
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (row[i] ?? '').trim(); });
+    return obj;
+  }
+
+  // ── UPLOAD ──
+  const zone = document.getElementById('upload-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+  document.getElementById('csv-file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+
+  function handleFile(file) {
+    if (!file) return;
+    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+      showErr('upload-err', 'Please upload a .csv file exported from Meta Ads Manager.');
+      return;
+    }
+    hideErr('upload-err');
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target.result;
+      const parsed = parseCSV(text);
+      if (parsed.length < 2) { showErr('upload-err', 'CSV seems empty or invalid.'); return; }
+      allHeaders = parsed[0];
+      parsedRows = parsed.slice(1).map(r => rowToObj(allHeaders, r));
+      selectedCols = new Set(allHeaders);
+      renderColGrid();
+      const status = document.getElementById('upload-status');
+      status.classList.add('visible');
+      document.getElementById('upload-status-text').textContent =
+        `${file.name} — ${parsedRows.length} rows · ${allHeaders.length} columns loaded`;
+    };
+    reader.readAsText(file);
+  }
+
+  // ── COLUMN GRID ──
+  function renderColGrid() {
+    const grid = document.getElementById('col-grid');
+    grid.innerHTML = '';
+    allHeaders.forEach(h => {
+      const div = document.createElement('label');
+      div.className = 'col-check' + (selectedCols.has(h) ? ' checked' : '');
+      div.innerHTML = `<input type="checkbox" ${selectedCols.has(h) ? 'checked' : ''} /><span class="col-check-icon">${selectedCols.has(h) ? '✓' : '+'}</span> ${escapeHtml(h)}`;
+      div.querySelector('input').addEventListener('change', ev => {
+        if (ev.target.checked) { selectedCols.add(h); div.classList.add('checked'); div.querySelector('.col-check-icon').textContent = '✓'; }
+        else { selectedCols.delete(h); div.classList.remove('checked'); div.querySelector('.col-check-icon').textContent = '+'; }
+      });
+      grid.appendChild(div);
+    });
+  }
+
+  function toggleAllCols(on) {
+    if (on) allHeaders.forEach(h => selectedCols.add(h));
+    else selectedCols.clear();
+    renderColGrid();
+  }
+
+  function applyTrackerPreset() {
+    selectedCols.clear();
+    allHeaders.forEach(h => {
+      const hl = h.toLowerCase();
+      if (TRACKER_KEYWORDS.some(kw => hl.includes(kw))) selectedCols.add(h);
+    });
+    if (selectedCols.size === 0) {
+      showErr('gen-err', 'No tracker-preset columns matched. Your CSV column names may differ — check and select manually.');
+    } else hideErr('gen-err');
+    renderColGrid();
+  }
+
+  // ── GENERATE ──
+  function generate() {
+    hideErr('gen-err');
+    if (parsedRows.length === 0) { showErr('gen-err', 'Upload a CSV file first.'); return; }
+    if (selectedCols.size === 0) { showErr('gen-err', 'Select at least one column.'); return; }
+
+    // Find Ad ID column (best guess)
+    const adIdCol = allHeaders.find(h => /ad.?id/i.test(h)) || null;
+
+    // Parse pasted IDs
+    const rawIds = document.getElementById('ad-ids-input').value.trim();
+    let filteredRows = [];
+    let unmatched = [];
+    const warnEl = document.getElementById('ids-warn');
+    warnEl.classList.remove('visible');
+
+    if (rawIds) {
+      const ids = rawIds.split('\n').map(s => s.trim()).filter(Boolean);
+      if (!adIdCol) {
+        showErr('gen-err', 'Could not detect an "Ad ID" column in your CSV. Check column names.');
+        return;
+      }
+      // Preserve order of pasted IDs
+      const rowMap = {};
+      parsedRows.forEach(r => { if (r[adIdCol]) rowMap[r[adIdCol].trim()] = r; });
+      ids.forEach(id => {
+        if (rowMap[id]) filteredRows.push(rowMap[id]);
+        else unmatched.push(id);
+      });
+      if (filteredRows.length === 0) {
+        showErr('gen-err', 'None of the pasted Ad IDs matched rows in the uploaded CSV.');
+        return;
+      }
+      if (unmatched.length > 0) {
+        warnEl.textContent = `${unmatched.length} Ad ID(s) not found in CSV: ${unmatched.slice(0,5).join(', ')}${unmatched.length > 5 ? '…' : ''}`;
+        warnEl.classList.add('visible');
+      }
+    } else {
+      filteredRows = parsedRows;
+    }
+
+    // Build output
+    const cols = allHeaders.filter(h => selectedCols.has(h));
+    const csvLines = [cols.map(csvCell).join(',')];
+    filteredRows.forEach(r => csvLines.push(cols.map(c => csvCell(r[c] ?? '')).join(',')));
+    generatedCSV = csvLines.join('\n');
+    generatedRows = filteredRows;
+
+    // Badges
+    document.getElementById('badge-rows').textContent = `${filteredRows.length} row${filteredRows.length !== 1 ? 's' : ''}`;
+    document.getElementById('badge-cols').textContent = `${cols.length} col${cols.length !== 1 ? 's' : ''}`;
+    document.getElementById('unmatched-note').textContent = unmatched.length > 0 ? `${unmatched.length} unmatched` : '';
+
+    renderTable(cols, filteredRows);
+    renderRaw();
+    document.getElementById('output-section').classList.add('visible');
+    switchTab(activeTab);
+    document.getElementById('output-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function csvCell(v) {
+    v = String(v ?? '');
+    if (v.includes(',') || v.includes('"') || v.includes('\n')) return '"' + v.replace(/"/g, '""') + '"';
+    return v;
+  }
+
+  function renderTable(cols, rows) {
+    const thead = document.querySelector('#csv-table thead');
+    const tbody = document.querySelector('#csv-table tbody');
+    thead.innerHTML = '<tr>' + cols.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr>';
+    tbody.innerHTML = rows.map(r =>
+      '<tr>' + cols.map(c => {
+        const v = r[c] ?? '';
+        const isNum = NUM_KEYWORDS.some(kw => c.toLowerCase().includes(kw));
+        const isId = /ad.?id/i.test(c);
+        return `<td class="${isId ? 'col-adid' : isNum ? 'col-num' : ''}">${escapeHtml(v)}</td>`;
+      }).join('') + '</tr>'
+    ).join('');
+  }
+
+  function renderRaw() {
+    document.getElementById('csv-raw').textContent = generatedCSV;
+  }
+
+  // ── TABS ──
+  function switchTab(tab) {
+    activeTab = tab;
+    document.getElementById('tab-table').classList.toggle('active', tab === 'table');
+    document.getElementById('tab-raw').classList.toggle('active', tab === 'raw');
+    document.getElementById('table-view-wrap').style.display = tab === 'table' ? 'block' : 'none';
+    document.getElementById('csv-raw').style.display = tab === 'raw' ? 'block' : 'none';
+  }
+
+  // ── COPY TABLE (tab-separated for sheets) ──
+  function copyTable() {
+    if (!generatedCSV) return;
+    const cols = allHeaders.filter(h => selectedCols.has(h));
+    const tsvLines = [];
+    tsvLines.push(cols.join('\t'));
+    generatedRows.forEach(r => tsvLines.push(cols.map(c => (r[c] ?? '').replace(/\t/g, ' ')).join('\t')));
+    navigator.clipboard.writeText(tsvLines.join('\n')).then(() => {
+      const btn = document.querySelector('.output-meta-right button:first-child');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1800);
+    });
+  }
+
+  // ── DOWNLOAD ──
+  function downloadCSV() {
+    if (!generatedCSV) return;
+    const blob = new Blob([generatedCSV], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'niktin-ads-export.csv';
+    a.click();
+  }
+
+  // ── RESET ──
+  function resetAll() {
+    parsedRows = []; allHeaders = []; selectedCols = new Set();
+    generatedCSV = ''; generatedRows = [];
+    document.getElementById('csv-file-input').value = '';
+    document.getElementById('ad-ids-input').value = '';
+    document.getElementById('upload-status').classList.remove('visible');
+    document.getElementById('col-grid').innerHTML = '<div class="empty-state" style="padding:1.5rem;grid-column:1/-1;font-size:13px;">Upload a CSV to see available columns</div>';
+    document.getElementById('output-section').classList.remove('visible');
+    ['upload-err','ids-warn','gen-err'].forEach(hideErr);
+  }
+
+  // ── HELPERS ──
+  function showErr(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.classList.add('visible'); }
+  function hideErr(id) { const el = document.getElementById(id); if (el) { el.textContent = ''; el.classList.remove('visible'); } }
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
