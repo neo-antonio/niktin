@@ -1,16 +1,21 @@
 // ── NIKTIN v1.0 — core JS ──
 
-const LS_DB   = 'niktin_db_v1';       // { rows: {...adId: rowObj}, headers: [...], lastUpdated }
-const LS_PRE  = 'niktin_presets_v1';  // { name: [col, col, ...] }
+const LS_DB  = 'niktin_db_v1';
+const LS_PRE = 'niktin_presets_v1';
 
 // ── IN-MEMORY STATE ──
-let db          = loadDB();
-let presets     = loadPresets();
-let allHeaders  = db.headers || [];
+let db           = loadDB();
+let presets      = loadPresets();
+let allHeaders   = db.headers || [];
 let selectedCols = new Set(allHeaders);
+// colOrder drives the column sequence; maintained as an array of header names
+let colOrder     = [...allHeaders];
 let generatedCSV = '';
 let generatedRows = [];
-let activeTab   = 'table';
+let activeTab    = 'table';
+
+// drag state
+let dragSrc = null;
 
 const NUM_KEYWORDS = [
   'spent','amount','value','ctr','frequency','purchases','clicks',
@@ -104,34 +109,29 @@ function mergeCSVIntoDb(text, filename) {
   const headers = parsed[0];
   const rows = parsed.slice(1).map(r => rowToObj(headers, r));
 
-  // Detect Ad ID column
   const adIdCol = headers.find(h => /ad.?id/i.test(h));
   if (!adIdCol) { showErr('upload-err', 'Could not detect an "Ad ID" column in this CSV.'); return; }
 
-  // Merge headers (union)
+  // Merge headers (union, preserving existing order then appending new)
   const newHeaders = [...new Set([...db.headers, ...headers])];
   db.headers = newHeaders;
-  allHeaders = newHeaders;
+  allHeaders  = newHeaders;
 
-  // Merge rows: if Ad ID exists, update fields; else insert
+  // Extend colOrder with any new headers
+  const existingSet = new Set(colOrder);
+  newHeaders.forEach(h => { if (!existingSet.has(h)) colOrder.push(h); });
+
   let added = 0, updated = 0;
   rows.forEach(row => {
     const id = (row[adIdCol] || '').trim();
     if (!id) return;
-    if (db.rows[id]) {
-      // Update existing fields
-      Object.assign(db.rows[id], row);
-      updated++;
-    } else {
-      db.rows[id] = row;
-      added++;
-    }
+    if (db.rows[id]) { Object.assign(db.rows[id], row); updated++; }
+    else { db.rows[id] = row; added++; }
   });
 
   db.lastUpdated = new Date().toISOString();
   saveDB();
 
-  // Rebuild column selection from merged headers
   selectedCols = new Set(newHeaders);
   renderColGrid();
   renderPresetRow();
@@ -142,23 +142,79 @@ function mergeCSVIntoDb(text, filename) {
     `${filename} merged — ${added} new · ${updated} updated · ${Object.keys(db.rows).length} total in database`;
 }
 
-// ── COLUMN GRID ──
+// ── COLUMN GRID (drag-to-reorder) ──
 function renderColGrid() {
   const grid = document.getElementById('col-grid');
   if (!allHeaders.length) {
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Upload a CSV or the database has no headers yet</div>';
     return;
   }
+
+  // Ensure colOrder contains all current headers
+  const orderSet = new Set(colOrder);
+  allHeaders.forEach(h => { if (!orderSet.has(h)) colOrder.push(h); });
+  // Remove stale entries
+  colOrder = colOrder.filter(h => allHeaders.includes(h));
+
   grid.innerHTML = '';
-  allHeaders.forEach(h => {
-    const div = document.createElement('label');
+  colOrder.forEach(h => {
+    const div = document.createElement('div');
     div.className = 'col-check' + (selectedCols.has(h) ? ' checked' : '');
-    div.innerHTML = `<input type="checkbox" ${selectedCols.has(h) ? 'checked' : ''} />
-      <span class="col-check-icon">${selectedCols.has(h) ? '✓' : '+'}</span> ${escapeHtml(h)}`;
-    div.querySelector('input').addEventListener('change', ev => {
-      if (ev.target.checked) { selectedCols.add(h); div.classList.add('checked'); div.querySelector('.col-check-icon').textContent = '✓'; }
-      else { selectedCols.delete(h); div.classList.remove('checked'); div.querySelector('.col-check-icon').textContent = '+'; }
+    div.draggable = true;
+    div.dataset.col = h;
+    div.innerHTML = `
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      <span class="col-check-icon">${selectedCols.has(h) ? '✓' : '+'}</span>
+      <span class="col-label">${escapeHtml(h)}</span>`;
+
+    // Toggle on click (but not when starting a drag)
+    div.addEventListener('click', () => {
+      if (selectedCols.has(h)) {
+        selectedCols.delete(h);
+        div.classList.remove('checked');
+        div.querySelector('.col-check-icon').textContent = '+';
+      } else {
+        selectedCols.add(h);
+        div.classList.add('checked');
+        div.querySelector('.col-check-icon').textContent = '✓';
+      }
     });
+
+    // Drag events
+    div.addEventListener('dragstart', e => {
+      dragSrc = div;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', h);
+      setTimeout(() => div.classList.add('dragging'), 0);
+    });
+    div.addEventListener('dragend', () => {
+      div.classList.remove('dragging');
+      grid.querySelectorAll('.col-check').forEach(el => el.classList.remove('drag-over-target'));
+      dragSrc = null;
+    });
+    div.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (dragSrc && dragSrc !== div) {
+        grid.querySelectorAll('.col-check').forEach(el => el.classList.remove('drag-over-target'));
+        div.classList.add('drag-over-target');
+      }
+    });
+    div.addEventListener('dragleave', () => div.classList.remove('drag-over-target'));
+    div.addEventListener('drop', e => {
+      e.preventDefault();
+      div.classList.remove('drag-over-target');
+      if (!dragSrc || dragSrc === div) return;
+      const srcCol = dragSrc.dataset.col;
+      const tgtCol = div.dataset.col;
+      const si = colOrder.indexOf(srcCol);
+      const ti = colOrder.indexOf(tgtCol);
+      if (si === -1 || ti === -1) return;
+      colOrder.splice(si, 1);
+      colOrder.splice(ti, 0, srcCol);
+      renderColGrid();
+    });
+
     grid.appendChild(div);
   });
 }
@@ -177,7 +233,7 @@ function renderPresetRow() {
   names.forEach(name => {
     const chip = document.createElement('span');
     chip.className = 'preset-chip';
-    chip.innerHTML = `${escapeHtml(name)} <span class="del" title="Delete preset" data-name="${escapeHtml(name)}">✕</span>`;
+    chip.innerHTML = `${escapeHtml(name)} <span class="del" title="Delete preset">✕</span>`;
     chip.addEventListener('click', e => {
       if (e.target.classList.contains('del')) {
         if (confirm(`Delete preset "${name}"?`)) { delete presets[name]; savePresets(); renderPresetRow(); }
@@ -196,7 +252,14 @@ function renderPresetRow() {
 
 function applyNamedPreset(name) {
   if (!presets[name]) return;
-  selectedCols = new Set(presets[name].filter(c => allHeaders.includes(c)));
+  const saved = presets[name];
+  // Presets store { cols, order } or legacy plain array
+  if (Array.isArray(saved)) {
+    selectedCols = new Set(saved.filter(c => allHeaders.includes(c)));
+  } else {
+    selectedCols = new Set((saved.cols || []).filter(c => allHeaders.includes(c)));
+    if (saved.order) colOrder = saved.order.filter(c => allHeaders.includes(c));
+  }
   renderColGrid();
 }
 
@@ -211,7 +274,8 @@ function closePresetModal() {
 function confirmSavePreset() {
   const name = document.getElementById('preset-name-input').value.trim();
   if (!name) { alert('Enter a preset name.'); return; }
-  presets[name] = [...selectedCols];
+  // Save both selected cols and current order
+  presets[name] = { cols: [...selectedCols], order: [...colOrder] };
   savePresets();
   renderPresetRow();
   closePresetModal();
@@ -224,12 +288,11 @@ document.getElementById('preset-name-input').addEventListener('keydown', e => {
 // ── GENERATE ──
 function generate() {
   hideErr('gen-err');
-  const dbRowCount = Object.keys(db.rows).length;
-  if (dbRowCount === 0) { showErr('gen-err', 'Database is empty — upload a CSV first.'); return; }
+  if (!Object.keys(db.rows).length) { showErr('gen-err', 'Database is empty — upload a CSV first.'); return; }
   if (!selectedCols.size) { showErr('gen-err', 'Select at least one column.'); return; }
 
   const adIdCol = allHeaders.find(h => /ad.?id/i.test(h));
-  const rawIds = document.getElementById('ad-ids-input').value.trim();
+  const rawIds  = document.getElementById('ad-ids-input').value.trim();
   let filteredRows = [], missingIds = [];
 
   document.getElementById('ids-warn').classList.remove('visible');
@@ -252,19 +315,18 @@ function generate() {
     filteredRows = Object.values(db.rows);
   }
 
-  const cols = allHeaders.filter(h => selectedCols.has(h));
+  // Respect colOrder for column sequence
+  const cols = colOrder.filter(h => selectedCols.has(h));
   const csvLines = [cols.map(csvCell).join(',')];
   filteredRows.forEach(r => csvLines.push(cols.map(c => csvCell(r[c] ?? '')).join(',')));
-  generatedCSV = csvLines.join('\n');
+  generatedCSV  = csvLines.join('\n');
   generatedRows = filteredRows;
 
   document.getElementById('badge-rows').textContent = `${filteredRows.length} row${filteredRows.length !== 1 ? 's' : ''}`;
   document.getElementById('badge-cols').textContent = `${cols.length} col${cols.length !== 1 ? 's' : ''}`;
   const missEl = document.getElementById('badge-missing');
-  if (missingIds.length) {
-    missEl.textContent = `${missingIds.length} missing`;
-    missEl.style.display = 'inline';
-  } else { missEl.style.display = 'none'; }
+  if (missingIds.length) { missEl.textContent = `${missingIds.length} missing`; missEl.style.display = 'inline'; }
+  else missEl.style.display = 'none';
 
   renderTable(cols, filteredRows);
   renderRaw();
@@ -276,8 +338,8 @@ function generate() {
 
 function showMissingIds(ids) {
   const box = document.getElementById('missing-ids-box');
-  const chips = document.getElementById('missing-ids-chips');
-  chips.innerHTML = ids.map(id => `<span class="missing-id-chip">${escapeHtml(id)}</span>`).join('');
+  document.getElementById('missing-ids-chips').innerHTML =
+    ids.map(id => `<span class="missing-id-chip">${escapeHtml(id)}</span>`).join('');
   box.classList.add('visible');
 }
 
@@ -286,6 +348,10 @@ function csvCell(v) {
   v = String(v ?? '');
   if (v.includes(',') || v.includes('"') || v.includes('\n')) return '"' + v.replace(/"/g, '""') + '"';
   return v;
+}
+
+function getActiveCols() {
+  return colOrder.filter(h => selectedCols.has(h));
 }
 
 function renderTable(cols, rows) {
@@ -315,17 +381,28 @@ function switchTab(tab) {
   document.getElementById('csv-raw').style.display          = tab === 'raw'   ? 'block' : 'none';
 }
 
-// ── COPY (TSV for sheets) ──
+// ── COPY HELPERS ──
+function buildTSV(includeHeaders) {
+  const cols = getActiveCols();
+  const dataRows = generatedRows.map(r => cols.map(c => (r[c] ?? '').replace(/\t/g, ' ')).join('\t'));
+  return includeHeaders ? [cols.join('\t'), ...dataRows].join('\n') : dataRows.join('\n');
+}
+
+function flashBtn(id, msg) {
+  const btn = document.getElementById(id);
+  const orig = btn.textContent;
+  btn.textContent = msg;
+  setTimeout(() => { btn.textContent = orig; }, 1800);
+}
+
 function copyTable() {
-  if (!generatedCSV) return;
-  const cols = allHeaders.filter(h => selectedCols.has(h));
-  const tsv = [cols.join('\t'), ...generatedRows.map(r => cols.map(c => (r[c] ?? '').replace(/\t/g,' ')).join('\t'))].join('\n');
-  navigator.clipboard.writeText(tsv).then(() => {
-    const btn = document.querySelector('#copy-table-btn');
-    const orig = btn.textContent;
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => { btn.textContent = orig; }, 1800);
-  });
+  if (!generatedRows.length) return;
+  navigator.clipboard.writeText(buildTSV(true)).then(() => flashBtn('copy-table-btn', '✓ Copied!'));
+}
+
+function copyTableNoHeaders() {
+  if (!generatedRows.length) return;
+  navigator.clipboard.writeText(buildTSV(false)).then(() => flashBtn('copy-no-headers-btn', '✓ Copied!'));
 }
 
 // ── DOWNLOAD OUTPUT CSV ──
@@ -336,8 +413,7 @@ function downloadCSV() {
 
 // ── DB EXPORT ──
 function exportDB() {
-  const json = JSON.stringify(db, null, 2);
-  triggerDownload(json, 'niktin-database.json', 'application/json');
+  triggerDownload(JSON.stringify(db, null, 2), 'niktin-database.json', 'application/json');
 }
 
 // ── DB IMPORT ──
@@ -347,11 +423,11 @@ document.getElementById('db-import-input').addEventListener('change', e => {
   reader.onload = ev => {
     try {
       const imported = JSON.parse(ev.target.result);
-      if (!imported.rows || !imported.headers) { alert('Invalid niktin database file.'); return; }
-      // Merge imported into existing
+      if (!imported.rows || !imported.headers) { alert('Invalid Niktin database file.'); return; }
       const newHeaders = [...new Set([...db.headers, ...imported.headers])];
-      db.headers = newHeaders;
-      allHeaders = newHeaders;
+      db.headers = newHeaders; allHeaders = newHeaders;
+      const existingSet = new Set(colOrder);
+      newHeaders.forEach(h => { if (!existingSet.has(h)) colOrder.push(h); });
       let added = 0, updated = 0;
       Object.entries(imported.rows).forEach(([id, row]) => {
         if (db.rows[id]) { Object.assign(db.rows[id], row); updated++; }
@@ -371,9 +447,9 @@ document.getElementById('db-import-input').addEventListener('change', e => {
 
 // ── CLEAR DB ──
 function clearDB() {
-  if (!confirm('Clear the entire niktin database? This cannot be undone.')) return;
+  if (!confirm('Clear the entire Niktin database? This cannot be undone.')) return;
   db = { rows: {}, headers: [], lastUpdated: null };
-  allHeaders = []; selectedCols = new Set();
+  allHeaders = []; selectedCols = new Set(); colOrder = [];
   saveDB();
   renderColGrid();
   renderPresetRow();
@@ -381,7 +457,7 @@ function clearDB() {
   document.getElementById('output-section').classList.remove('visible');
 }
 
-// ── RESET SESSION (keep DB) ──
+// ── CLEAR OUTPUT ──
 function resetAll() {
   generatedCSV = ''; generatedRows = [];
   document.getElementById('csv-file-input').value = '';
@@ -406,9 +482,9 @@ function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&l
 
 // ── INIT ──
 (function init() {
+  colOrder = [...allHeaders];
   refreshDBPill();
   renderColGrid();
   renderPresetRow();
-  // Restore selected cols from DB headers
   selectedCols = new Set(allHeaders);
 })();

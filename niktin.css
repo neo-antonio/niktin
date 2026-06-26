@@ -172,6 +172,15 @@ textarea::placeholder { color: var(--gray-400); }
 .col-check input { display: none; }
 .col-check-icon { font-size: 13px; opacity: 0.5; flex-shrink: 0; }
 .col-check.checked .col-check-icon { opacity: 1; }
+.col-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.drag-handle {
+  font-size: 14px; opacity: 0.25; cursor: grab; flex-shrink: 0;
+  padding-right: 2px; user-select: none; line-height: 1;
+}
+.col-check:hover .drag-handle { opacity: 0.55; }
+.col-check.checked .drag-handle { opacity: 0.45; }
+.col-check.dragging { opacity: 0.35; border-style: dashed; }
+.col-check.drag-over-target { border-color: var(--black); background: var(--gray-100); }
 
 .col-actions { display: flex; gap: 8px; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
 
