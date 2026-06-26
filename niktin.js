@@ -12,10 +12,8 @@ let selectedCols = new Set(allHeaders);
 let colOrder     = [...allHeaders];
 let generatedCSV = '';
 let generatedRows = [];
+let generatedCols = [];
 let activeTab    = 'table';
-
-// drag state
-let dragSrc = null;
 
 const NUM_KEYWORDS = [
   'spent','amount','value','ctr','frequency','purchases','clicks',
@@ -142,81 +140,96 @@ function mergeCSVIntoDb(text, filename) {
     `${filename} merged — ${added} new · ${updated} updated · ${Object.keys(db.rows).length} total in database`;
 }
 
-// ── COLUMN GRID (drag-to-reorder) ──
+// ── COLUMN GRID (pointer-based drag-to-reorder) ──
 function renderColGrid() {
   const grid = document.getElementById('col-grid');
   if (!allHeaders.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Upload a CSV or the database has no headers yet</div>';
+    grid.innerHTML = '<div class="empty-state" style="padding:1rem;">Upload a CSV or the database has no headers yet</div>';
     return;
   }
-
-  // Ensure colOrder contains all current headers
+  // Sync colOrder
   const orderSet = new Set(colOrder);
   allHeaders.forEach(h => { if (!orderSet.has(h)) colOrder.push(h); });
-  // Remove stale entries
   colOrder = colOrder.filter(h => allHeaders.includes(h));
 
   grid.innerHTML = '';
   colOrder.forEach(h => {
     const div = document.createElement('div');
     div.className = 'col-check' + (selectedCols.has(h) ? ' checked' : '');
-    div.draggable = true;
     div.dataset.col = h;
     div.innerHTML = `
       <span class="drag-handle" title="Drag to reorder">⠿</span>
       <span class="col-check-icon">${selectedCols.has(h) ? '✓' : '+'}</span>
       <span class="col-label">${escapeHtml(h)}</span>`;
-
-    // Toggle on click (but not when starting a drag)
-    div.addEventListener('click', () => {
-      if (selectedCols.has(h)) {
-        selectedCols.delete(h);
-        div.classList.remove('checked');
-        div.querySelector('.col-check-icon').textContent = '+';
-      } else {
-        selectedCols.add(h);
-        div.classList.add('checked');
-        div.querySelector('.col-check-icon').textContent = '✓';
-      }
+    div.addEventListener('click', e => {
+      if (e.target.closest('.drag-handle')) return;
+      if (selectedCols.has(h)) { selectedCols.delete(h); div.classList.remove('checked'); div.querySelector('.col-check-icon').textContent = '+'; }
+      else { selectedCols.add(h); div.classList.add('checked'); div.querySelector('.col-check-icon').textContent = '✓'; }
     });
-
-    // Drag events
-    div.addEventListener('dragstart', e => {
-      dragSrc = div;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', h);
-      setTimeout(() => div.classList.add('dragging'), 0);
-    });
-    div.addEventListener('dragend', () => {
-      div.classList.remove('dragging');
-      grid.querySelectorAll('.col-check').forEach(el => el.classList.remove('drag-over-target'));
-      dragSrc = null;
-    });
-    div.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (dragSrc && dragSrc !== div) {
-        grid.querySelectorAll('.col-check').forEach(el => el.classList.remove('drag-over-target'));
-        div.classList.add('drag-over-target');
-      }
-    });
-    div.addEventListener('dragleave', () => div.classList.remove('drag-over-target'));
-    div.addEventListener('drop', e => {
-      e.preventDefault();
-      div.classList.remove('drag-over-target');
-      if (!dragSrc || dragSrc === div) return;
-      const srcCol = dragSrc.dataset.col;
-      const tgtCol = div.dataset.col;
-      const si = colOrder.indexOf(srcCol);
-      const ti = colOrder.indexOf(tgtCol);
-      if (si === -1 || ti === -1) return;
-      colOrder.splice(si, 1);
-      colOrder.splice(ti, 0, srcCol);
-      renderColGrid();
-    });
-
     grid.appendChild(div);
   });
+  initPointerSort(grid);
+}
+
+function initPointerSort(grid) {
+  let dragging = null, ghost = null, placeholder = null, offsetY = 0;
+
+  function cleanup() {
+    if (ghost) { ghost.remove(); ghost = null; }
+    if (placeholder) { placeholder.remove(); placeholder = null; }
+    if (dragging) { dragging.style.visibility = ''; dragging.classList.remove('sorting'); dragging = null; }
+  }
+
+  grid.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.drag-handle')) return;
+    e.preventDefault();
+    dragging = e.target.closest('.col-check');
+    const rect = dragging.getBoundingClientRect();
+    offsetY = e.clientY - rect.top;
+
+    placeholder = document.createElement('div');
+    placeholder.className = 'col-check';
+    placeholder.style.cssText = `height:${rect.height}px;border:1.5px dashed var(--gray-200);background:var(--gray-100);border-radius:6px;`;
+    dragging.after(placeholder);
+    dragging.style.visibility = 'hidden';
+    dragging.classList.add('sorting');
+
+    ghost = dragging.cloneNode(true);
+    ghost.classList.remove('sorting');
+    ghost.style.cssText = `position:fixed;left:${rect.left}px;width:${rect.width}px;top:${rect.top}px;pointer-events:none;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,0.18);border-radius:6px;margin:0;opacity:0.95;`;
+    document.body.appendChild(ghost);
+
+    grid.setPointerCapture(e.pointerId);
+  });
+
+  grid.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    e.preventDefault();
+    ghost.style.top = (e.clientY - offsetY) + 'px';
+
+    // Find insertion point by scanning siblings
+    const siblings = [...grid.querySelectorAll('.col-check')].filter(el => el !== dragging && el !== placeholder);
+    let inserted = false;
+    for (const sib of siblings) {
+      const r = sib.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) {
+        grid.insertBefore(placeholder, sib);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) grid.appendChild(placeholder);
+  });
+
+  grid.addEventListener('pointerup', e => {
+    if (!dragging) return;
+    grid.insertBefore(dragging, placeholder);
+    cleanup();
+    // Rebuild colOrder from DOM
+    colOrder = [...grid.querySelectorAll('.col-check[data-col]')].map(el => el.dataset.col);
+  });
+
+  grid.addEventListener('pointercancel', cleanup);
 }
 
 function toggleAllCols(on) {
@@ -321,6 +334,7 @@ function generate() {
   filteredRows.forEach(r => csvLines.push(cols.map(c => csvCell(r[c] ?? '')).join(',')));
   generatedCSV  = csvLines.join('\n');
   generatedRows = filteredRows;
+  generatedCols = cols;
 
   document.getElementById('badge-rows').textContent = `${filteredRows.length} row${filteredRows.length !== 1 ? 's' : ''}`;
   document.getElementById('badge-cols').textContent = `${cols.length} col${cols.length !== 1 ? 's' : ''}`;
@@ -348,10 +362,6 @@ function csvCell(v) {
   v = String(v ?? '');
   if (v.includes(',') || v.includes('"') || v.includes('\n')) return '"' + v.replace(/"/g, '""') + '"';
   return v;
-}
-
-function getActiveCols() {
-  return colOrder.filter(h => selectedCols.has(h));
 }
 
 function renderTable(cols, rows) {
@@ -383,7 +393,7 @@ function switchTab(tab) {
 
 // ── COPY HELPERS ──
 function buildTSV(includeHeaders) {
-  const cols = getActiveCols();
+  const cols = generatedCols;
   const dataRows = generatedRows.map(r => cols.map(c => (r[c] ?? '').replace(/\t/g, ' ')).join('\t'));
   return includeHeaders ? [cols.join('\t'), ...dataRows].join('\n') : dataRows.join('\n');
 }
