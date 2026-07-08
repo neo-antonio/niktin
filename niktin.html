@@ -65,14 +65,14 @@
   <div class="step">
     <div class="step-header">
       <span class="step-num">1</span>
-      <span class="step-title">Upload Meta Ads CSV export</span>
+      <span class="step-title">Upload ads export (.csv or .xlsx)</span>
     </div>
     <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-file-input').click()">
       <div class="upload-icon">⬆</div>
       <div class="upload-text"><strong>Click to upload</strong> or drag and drop</div>
-      <div class="upload-hint">New uploads automatically merge into the database — existing Ad IDs are updated, new ones are added</div>
+      <div class="upload-hint">Supports .csv and .xlsx — Meta Ads Manager, TikTok Ads, and more</div>
     </div>
-    <input type="file" id="csv-file-input" accept=".csv,text/csv" />
+    <input type="file" id="csv-file-input" accept=".csv,.xlsx,.xls,text/csv" />
     <div class="status-bar" id="upload-status">
       <span class="status-dot"></span>
       <span id="upload-status-text">File loaded</span>

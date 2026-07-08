@@ -89,40 +89,103 @@ zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
 zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
 document.getElementById('csv-file-input').addEventListener('change', e => { handleFile(e.target.files[0]); e.target.value = ''; });
 
-function handleFile(file) {
-  if (!file) return;
-  if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
-    showErr('upload-err', 'Please upload a .csv file exported from Meta Ads Manager.'); return;
-  }
-  hideErr('upload-err');
-  const reader = new FileReader();
-  reader.onload = e => mergeCSVIntoDb(e.target.result, file.name);
-  reader.readAsText(file);
+// Load SheetJS on demand (only when an xlsx is uploaded)
+function loadSheetJS(cb) {
+  if (window.XLSX) { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = cb;
+  s.onerror = () => showErr('upload-err', 'Could not load xlsx parser. Check your internet connection.');
+  document.head.appendChild(s);
 }
 
-function mergeCSVIntoDb(text, filename) {
-  const parsed = parseCSV(text);
-  if (parsed.length < 2) { showErr('upload-err', 'CSV seems empty or invalid.'); return; }
+function handleFile(file) {
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  const isXLSX = name.endsWith('.xlsx') || name.endsWith('.xls');
+  const isCSV  = name.endsWith('.csv') || file.type === 'text/csv';
+  if (!isXLSX && !isCSV) {
+    showErr('upload-err', 'Please upload a .csv or .xlsx file exported from Meta or TikTok Ads Manager.'); return;
+  }
+  hideErr('upload-err');
 
-  const headers = parsed[0];
-  const rows = parsed.slice(1).map(r => rowToObj(headers, r));
+  if (isXLSX) {
+    loadSheetJS(() => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          // Delete the !ref if it only spans one column — forces SheetJS to re-scan
+          if (ws['!ref']) {
+            const match = ws['!ref'].match(/^([A-Z]+)\d+:([A-Z]+)\d+$/);
+            if (match && match[1] === match[2]) delete ws['!ref'];
+          }
+          const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+          if (aoa.length < 2) { showErr('upload-err', 'Spreadsheet appears empty.'); return; }
+          // Find the actual header row (skip any title/summary rows before data)
+          let headerRowIdx = 0;
+          for (let i = 0; i < Math.min(aoa.length, 6); i++) {
+            if (aoa[i].some(cell => /ad.?id|ad\s*name/i.test(String(cell)))) { headerRowIdx = i; break; }
+          }
+          const headers = aoa[headerRowIdx].map(h => String(h).trim()).filter(Boolean);
+          // Build rows, skip summary/total rows (where Ad ID cell looks like a dash or is blank)
+          const rows = aoa.slice(headerRowIdx + 1)
+            .filter(r => r.length > 0)
+            .map(r => {
+              const obj = {};
+              headers.forEach((h, i) => { obj[h] = String(r[i] ?? '').trim(); });
+              return obj;
+            })
+            .filter(row => {
+              // Drop total/summary rows — they typically have "Total" or "-" in the first cell
+              const first = Object.values(row)[0] || '';
+              return !/^(total|-)$/i.test(first.trim());
+            });
+          mergeRowsIntoDb(headers, rows, file.name);
+        } catch (err) {
+          showErr('upload-err', 'Could not parse xlsx file: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  } else {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const parsed = parseCSV(e.target.result);
+      if (parsed.length < 2) { showErr('upload-err', 'CSV seems empty or invalid.'); return; }
+      const headers = parsed[0];
+      const rows = parsed.slice(1).map(r => rowToObj(headers, r));
+      mergeRowsIntoDb(headers, rows, file.name);
+    };
+    reader.readAsText(file);
+  }
+}
 
-  const adIdCol = headers.find(h => /ad.?id/i.test(h));
-  if (!adIdCol) { showErr('upload-err', 'Could not detect an "Ad ID" column in this CSV.'); return; }
+// Ad ID column detection — handles "Ad ID", "Ad Id", "ad_id", "adid", etc.
+function findAdIdCol(headers) {
+  return headers.find(h => /^ad[\s_-]?id$/i.test(h.trim()))
+      || headers.find(h => /ad[\s_-]?id/i.test(h));
+}
 
-  // Merge headers (union, preserving existing order then appending new)
+function mergeRowsIntoDb(headers, rows, filename) {
+  const adIdCol = findAdIdCol(headers);
+  if (!adIdCol) {
+    showErr('upload-err', `Could not detect an Ad ID column. Columns found: ${headers.slice(0,8).join(', ')}…`);
+    return;
+  }
+
   const newHeaders = [...new Set([...db.headers, ...headers])];
   db.headers = newHeaders;
   allHeaders  = newHeaders;
 
-  // Extend colOrder with any new headers
   const existingSet = new Set(colOrder);
   newHeaders.forEach(h => { if (!existingSet.has(h)) colOrder.push(h); });
 
   let added = 0, updated = 0;
   rows.forEach(row => {
     const id = (row[adIdCol] || '').trim();
-    if (!id) return;
+    if (!id || /^[-–]$/.test(id)) return;
     if (db.rows[id]) { Object.assign(db.rows[id], row); updated++; }
     else { db.rows[id] = row; added++; }
   });
@@ -138,6 +201,14 @@ function mergeCSVIntoDb(text, filename) {
   status.classList.add('visible');
   document.getElementById('upload-status-text').textContent =
     `${filename} merged — ${added} new · ${updated} updated · ${Object.keys(db.rows).length} total in database`;
+}
+
+function mergeCSVIntoDb(text, filename) {
+  const parsed = parseCSV(text);
+  if (parsed.length < 2) { showErr('upload-err', 'CSV seems empty or invalid.'); return; }
+  const headers = parsed[0];
+  const rows = parsed.slice(1).map(r => rowToObj(headers, r));
+  mergeRowsIntoDb(headers, rows, filename);
 }
 
 // ── COLUMN GRID (pointer-based drag-to-reorder) ──
@@ -304,7 +375,7 @@ function generate() {
   if (!Object.keys(db.rows).length) { showErr('gen-err', 'Database is empty — upload a CSV first.'); return; }
   if (!selectedCols.size) { showErr('gen-err', 'Select at least one column.'); return; }
 
-  const adIdCol = allHeaders.find(h => /ad.?id/i.test(h));
+  const adIdCol = findAdIdCol(allHeaders);
   const rawIds  = document.getElementById('ad-ids-input').value.trim();
   let filteredRows = [], missingIds = [];
 
