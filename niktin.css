@@ -159,9 +159,10 @@ textarea::placeholder { color: var(--gray-400); }
 /* ── COLUMN PICKER ── */
 .col-grid {
   display: flex; flex-direction: column; gap: 4px; margin-top: 0.75rem;
-  max-height: 320px; overflow-y: auto;
+  max-height: 320px; overflow-y: auto; overflow-x: hidden;
   border: 1px solid var(--gray-200); border-radius: var(--radius-md);
-  padding: 6px; background: var(--gray-50);
+  padding: 6px 10px 6px 6px; background: var(--gray-50);
+  scrollbar-width: thin; scrollbar-color: var(--gray-200) transparent;
 }
 .col-check {
   display: flex; align-items: center; gap: 8px; padding: 0.45rem 0.75rem;

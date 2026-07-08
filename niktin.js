@@ -243,64 +243,79 @@ function renderColGrid() {
 }
 
 function initPointerSort(grid) {
+  grid.addEventListener('mousedown', onDragStart);
+  grid.addEventListener('touchstart', onDragStart, { passive: false });
+
   let dragging = null, ghost = null, placeholder = null, offsetY = 0;
 
-  function cleanup() {
-    if (ghost) { ghost.remove(); ghost = null; }
-    if (placeholder) { placeholder.remove(); placeholder = null; }
-    if (dragging) { dragging.style.visibility = ''; dragging.classList.remove('sorting'); dragging = null; }
-  }
-
-  grid.addEventListener('pointerdown', e => {
-    if (!e.target.closest('.drag-handle')) return;
+  function onDragStart(e) {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
     e.preventDefault();
-    dragging = e.target.closest('.col-check');
+
+    dragging = handle.closest('.col-check');
     const rect = dragging.getBoundingClientRect();
-    offsetY = e.clientY - rect.top;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    offsetY = clientY - rect.top;
 
+    // Placeholder keeps the slot
     placeholder = document.createElement('div');
-    placeholder.className = 'col-check';
-    placeholder.style.cssText = `height:${rect.height}px;border:1.5px dashed var(--gray-200);background:var(--gray-100);border-radius:6px;`;
-    dragging.after(placeholder);
-    dragging.style.visibility = 'hidden';
-    dragging.classList.add('sorting');
+    placeholder.style.cssText = `height:${rect.height}px;flex-shrink:0;border:1.5px dashed #d0d0cc;background:#f4f4f0;border-radius:6px;box-sizing:border-box;`;
+    dragging.insertAdjacentElement('afterend', placeholder);
+    dragging.style.display = 'none';
 
+    // Floating ghost
     ghost = dragging.cloneNode(true);
-    ghost.classList.remove('sorting');
-    ghost.style.cssText = `position:fixed;left:${rect.left}px;width:${rect.width}px;top:${rect.top}px;pointer-events:none;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,0.18);border-radius:6px;margin:0;opacity:0.95;`;
+    ghost.style.cssText = `
+      position:fixed;left:${rect.left}px;width:${rect.width}px;top:${rect.top}px;
+      pointer-events:none;z-index:9999;opacity:0.9;border-radius:6px;margin:0;
+      box-shadow:0 8px 24px rgba(0,0,0,0.15);`;
     document.body.appendChild(ghost);
 
-    grid.setPointerCapture(e.pointerId);
-  });
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('touchmove', onDragMove, { passive: false });
+    document.addEventListener('mouseup', onDragEnd);
+    document.addEventListener('touchend', onDragEnd);
+  }
 
-  grid.addEventListener('pointermove', e => {
+  function onDragMove(e) {
     if (!dragging) return;
     e.preventDefault();
-    ghost.style.top = (e.clientY - offsetY) + 'px';
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    ghost.style.top = (clientY - offsetY) + 'px';
 
-    // Find insertion point by scanning siblings
-    const siblings = [...grid.querySelectorAll('.col-check')].filter(el => el !== dragging && el !== placeholder);
-    let inserted = false;
-    for (const sib of siblings) {
-      const r = sib.getBoundingClientRect();
-      if (e.clientY < r.top + r.height / 2) {
-        grid.insertBefore(placeholder, sib);
-        inserted = true;
+    // Find where to insert placeholder
+    const items = [...grid.querySelectorAll('.col-check[data-col]')];
+    let placed = false;
+    for (const item of items) {
+      const r = item.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) {
+        grid.insertBefore(placeholder, item);
+        placed = true;
         break;
       }
     }
-    if (!inserted) grid.appendChild(placeholder);
-  });
+    if (!placed) grid.appendChild(placeholder);
+  }
 
-  grid.addEventListener('pointerup', e => {
+  function onDragEnd(e) {
     if (!dragging) return;
+    // Drop dragging before placeholder, then remove placeholder
     grid.insertBefore(dragging, placeholder);
-    cleanup();
-    // Rebuild colOrder from DOM
-    colOrder = [...grid.querySelectorAll('.col-check[data-col]')].map(el => el.dataset.col);
-  });
+    placeholder.remove();
+    dragging.style.display = '';
+    ghost.remove();
 
-  grid.addEventListener('pointercancel', cleanup);
+    dragging = null; ghost = null; placeholder = null;
+
+    // Rebuild colOrder from DOM order
+    colOrder = [...grid.querySelectorAll('.col-check[data-col]')].map(el => el.dataset.col);
+
+    document.removeEventListener('mousemove', onDragMove);
+    document.removeEventListener('touchmove', onDragMove);
+    document.removeEventListener('mouseup', onDragEnd);
+    document.removeEventListener('touchend', onDragEnd);
+  }
 }
 
 function toggleAllCols(on) {
@@ -337,12 +352,16 @@ function renderPresetRow() {
 function applyNamedPreset(name) {
   if (!presets[name]) return;
   const saved = presets[name];
-  // Presets store { cols, order } or legacy plain array
   if (Array.isArray(saved)) {
+    // Legacy format — just cols, no order
     selectedCols = new Set(saved.filter(c => allHeaders.includes(c)));
   } else {
+    const restoredOrder = (saved.order || []).filter(c => allHeaders.includes(c));
+    // Append any headers not in the saved order (new columns added since preset was saved)
+    const inOrder = new Set(restoredOrder);
+    allHeaders.forEach(h => { if (!inOrder.has(h)) restoredOrder.push(h); });
+    colOrder = restoredOrder;
     selectedCols = new Set((saved.cols || []).filter(c => allHeaders.includes(c)));
-    if (saved.order) colOrder = saved.order.filter(c => allHeaders.includes(c));
   }
   renderColGrid();
 }
