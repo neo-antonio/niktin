@@ -11,8 +11,6 @@
 <link rel="stylesheet" href="niktin.css" />
 </head>
 <body>
-
-<!-- HEADER -->
 <header>
   <a class="header-brand" href="#">
     <span class="header-logo">
@@ -25,18 +23,15 @@
       <span class="db-dot" id="db-dot"></span>
       <span id="db-count">0 ads in database</span>
     </div>
-    <span class="header-version">v1.2</span>
+    <span class="header-version">v1.0</span>
   </div>
 </header>
-
-<!-- MAIN -->
 <main>
   <div class="intro">
     <h1>Ad Performance Filter</h1>
     <p>Niktin remembers every CSV you upload. Paste Ad IDs to filter, pick columns, and copy straight into your tracker sheet.</p>
   </div>
-
-  <!-- DATABASE PANEL -->
+  
   <div class="db-panel">
     <div class="db-panel-header" id="db-panel-header">
       <div class="db-panel-left">
@@ -60,8 +55,7 @@
       </div>
     </div>
   </div>
-
-  <!-- STEP 1 — Upload CSV -->
+  
   <div class="step">
     <div class="step-header">
       <span class="step-num">1</span>
@@ -79,8 +73,7 @@
     </div>
     <div class="alert alert-err" id="upload-err"></div>
   </div>
-
-  <!-- STEP 2 — Paste Ad IDs -->
+  
   <div class="step">
     <div class="step-header">
       <span class="step-num">2</span>
@@ -94,8 +87,7 @@
       <div class="missing-ids-chips" id="missing-ids-chips"></div>
     </div>
   </div>
-
-  <!-- STEP 3 — Pick Columns -->
+  
   <div class="step">
     <div class="step-header">
       <span class="step-num">3</span>
@@ -110,15 +102,13 @@
     </div>
     <div class="preset-row" id="preset-row"></div>
   </div>
-
-  <!-- GENERATE -->
+  
   <div class="generate-bar">
     <button class="btn-primary" onclick="generate()">Generate output</button>
     <button class="btn-ghost" onclick="resetAll()">Clear output</button>
   </div>
   <div class="alert alert-err" id="gen-err"></div>
-
-  <!-- OUTPUT -->
+  
   <div id="output-section">
     <div class="output-meta">
       <div class="output-meta-left">
@@ -140,15 +130,11 @@
     <div id="csv-raw"></div>
   </div>
 </main>
-
-<!-- FOOTER -->
 <footer>
   <div>Visit <a href="https://neushimo.com/niktin" target="_blank" rel="noopener">neushimo.com</a> for updates</div>
   <div>©2026 Neo Antonio</div>
   <div>All rights reserved</div>
 </footer>
-
-<!-- PRESET MODAL -->
 <div class="modal-overlay" id="preset-modal">
   <div class="modal">
     <h3>Save column preset</h3>
@@ -159,7 +145,6 @@
     </div>
   </div>
 </div>
-
 <script src="niktin.js"></script>
 </body>
 </html>
