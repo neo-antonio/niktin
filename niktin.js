@@ -1,8 +1,8 @@
 const LS_DB  = 'niktin_db_v1';
 const LS_PRE = 'niktin_presets_v1';
-let db           = loadDB();
+let db           = { rows: {}, headers: [], lastUpdated: null };
 let presets      = loadPresets();
-let allHeaders   = db.headers || [];
+let allHeaders   = [];
 let selectedCols = new Set(allHeaders);
 let colOrder     = [...allHeaders];
 let generatedCSV = '';
@@ -13,13 +13,62 @@ const NUM_KEYWORDS = [
   'spent','amount','value','ctr','frequency','purchases','clicks',
   'views','cart','checkout','cost','reach','impressions','results'
 ];
-function loadDB() {
-  try { return JSON.parse(localStorage.getItem(LS_DB)) || { rows: {}, headers: [], lastUpdated: null }; }
-  catch { return { rows: {}, headers: [], lastUpdated: null }; }
+const IDB_NAME = 'niktin', IDB_STORE = 'kv', IDB_KEY = 'db';
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
+async function idbGet() {
+  const conn = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const req = conn.transaction(IDB_STORE).objectStore(IDB_STORE).get(IDB_KEY);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(value) {
+  const conn = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = conn.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(value, IDB_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+async function loadDB() {
+  const empty = { rows: {}, headers: [], lastUpdated: null };
+  try {
+    const stored = await idbGet();
+    if (stored) return stored;
+    // One-time migration from the old localStorage database
+    const legacy = localStorage.getItem(LS_DB);
+    if (legacy) {
+      const parsed = JSON.parse(legacy);
+      if (parsed && parsed.rows) {
+        await idbSet(parsed);
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Niktin: could not load database', err);
+  }
+  return empty;
+}
+let saveChain = Promise.resolve();
 function saveDB() {
-  localStorage.setItem(LS_DB, JSON.stringify(db));
   refreshDBPill();
+  saveChain = saveChain
+    .then(() => idbSet(db))
+    .catch(err => {
+      console.error('Niktin: save failed', err);
+      showErr('upload-err', 'Could not save the database: ' + (err && err.message || err) + '. Use "Export database" to back up your data.');
+    });
+  return saveChain;
 }
 function loadPresets() {
   try { return JSON.parse(localStorage.getItem(LS_PRE)) || {}; }
@@ -481,7 +530,9 @@ function triggerDownload(content, filename, type) {
 function showErr(id, msg) { const el = document.getElementById(id); if (el) { el.textContent = msg; el.classList.add('visible'); } }
 function hideErr(id) { const el = document.getElementById(id); if (el) { el.textContent = ''; el.classList.remove('visible'); } }
 function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-(function init() {
+(async function init() {
+  db = await loadDB();
+  allHeaders = db.headers || [];
   colOrder = [...allHeaders];
   refreshDBPill();
   renderColGrid();
